@@ -1,14 +1,17 @@
-const logger = require('./helper/logger');
 const superagent = require('superagent');
 const cheerio = require('cheerio');
 const async = require('async');
+const process = require('process');
+const co = require('co');
+const fs = require('fs');
+const os = require('os');
+const logger = require('./helper/logger');
 const eventproxy = require('eventproxy');
 const config = require('./config');
-const process = require('process');
-const fs = require('fs');
 const poem = require('./beans/poem')
+const esclient = require('./helper/esclient');
+
 const ep = new eventproxy();
-const co = require('co');
 
 process.on('unhandledRejection', (err) => {
 	logger.error(err)
@@ -71,7 +74,20 @@ const main = async () => {
 				let $source = $cont.find('.source');
 				let dynasty = $source.find('a').eq(0).text().trim();
 				let author = $source.find('a').eq(1).text().trim();
-				let content = $cont.find('.contson').text().trim();
+				let $contson = $cont.find('.contson');
+				$contson.find('span[stype]').remove();
+				$contson.find('br').replaceWith('$');
+				let content;
+				if ($contson.find('p').length) {
+					let contentArray = [];
+					$contson.find('p').each((idx, element) => {
+						contentArray.push($(element).text());
+					})
+					content = contentArray.join('$');
+				} else {
+					content = $contson.text();
+				}
+				content = content.replace(/\n/g, '');
 				let tags = [];
 				$left.find('.sons').first().find('.tag a').each((idx, element) => {
 					tags.push($(element).text());
@@ -82,6 +98,7 @@ const main = async () => {
 			});
 		});
 
+		//完善古诗内容
 		ep.after('poemObjs', poemUrls.size, async poemObjs => {
 			logger.info('start to crawle other content.');
 			async.mapLimit(poemObjs, config.request_parallel_size, (poem, callback) => {
@@ -91,29 +108,50 @@ const main = async () => {
 				let shangxiurl = 'https://so.gushiwen.org/shiwen2017/ajaxshiwencont.aspx?id=' + id + '&value=shang';
 				co(fetchPageDomsGenerator([fanyiurl, zhushiurl, shangxiurl])).then(results => {
 					//处理翻译内容
-					{	
+					{
 						let $ = results[0];
 						if ($) {
-							let fanyiLines=[];
+							let fanyiLines = [];
 							$('p span').each((idx, element) => {
 								let $span = $(element);
 								let fanyiLine = $span.text();
 								let yuanwenLine = $span.parent('p').text();
-								yuanwenLine=yuanwenLine.replace(fanyiLine,'');
-								fanyiLines.push(yuanwenLine+'$'+fanyiLine);
+								yuanwenLine = yuanwenLine.replace(fanyiLine, '');
+								fanyiLines.push(yuanwenLine + '$' + fanyiLine);
 							})
-							let fanyi=fanyiLines.join('$$');
-							console.log(fanyi);
+							let fanyi = fanyiLines.join('$$');
+							poem.fanyi = fanyi;
 						}
 					}
 					//处理注释内容
 					{
-						let $=results[1];
+						let $ = results[1];
+						if ($) {
+							let zhushiLines = [];
+							$('p').not('[style]').each((idx, element) => {
+								let $p = $(element);
+								let zhushiLine = $p.find('span').last().text();
+								let yuanwenLine = $p.text();
+								yuanwenLine = yuanwenLine.replace(zhushiLine, '');
+								zhushiLines.push(yuanwenLine + '$' + zhushiLine);
+							})
+							let zhushi = zhushiLines.join('$$');
+							poem.zhushi = zhushi;
+						}
 					}
 					//处理赏析内容
 					{
-
+						let $ = results[2];
+						if ($) {
+							let shangxiLines = [];
+							$('div.hr').nextAll('p').not('[style]').each((idx, element) => {
+								shangxiLines.push($(element).text());
+							})
+							let shangxi = shangxiLines.join('$');
+							poem.shangxi = shangxi;
+						}
 					}
+					fs.appendFile('./poems.txt', JSON.stringify(poem, null, 2) + os.EOL);
 					callback(null, 'crawle other content finished of id:' + id)
 				})
 			});
