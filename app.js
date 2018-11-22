@@ -8,6 +8,7 @@ const process = require('process');
 const fs = require('fs');
 const poem = require('./beans/poem')
 const ep = new eventproxy();
+const co = require('co');
 
 process.on('unhandledRejection', (err) => {
 	logger.error(err)
@@ -83,26 +84,37 @@ const main = async () => {
 
 		ep.after('poemObjs', poemUrls.size, async poemObjs => {
 			logger.info('start to crawle other content.');
-			async.mapLimit(poemObjs, paralSize, (poem, callback) => {
+			async.mapLimit(poemObjs, config.request_parallel_size, (poem, callback) => {
 				id = poem.id;
 				let fanyiurl = 'https://so.gushiwen.org/shiwen2017/ajaxshiwencont.aspx?id=' + id + '&value=yi';
 				let zhushiurl = 'https://so.gushiwen.org/shiwen2017/ajaxshiwencont.aspx?id=' + id + '&value=zhu';
 				let shangxiurl = 'https://so.gushiwen.org/shiwen2017/ajaxshiwencont.aspx?id=' + id + '&value=shang';
-				fetchPageDoms([fanyiurl, zhushiurl, shangxiurl]).then(results => {
-					{
+				co(fetchPageDomsGenerator([fanyiurl, zhushiurl, shangxiurl])).then(results => {
+					//处理翻译内容
+					{	
 						let $ = results[0];
 						if ($) {
-							$('span [style="color:#76621c;"]').each((idx, element) => {
+							let fanyiLines=[];
+							$('p span').each((idx, element) => {
 								let $span = $(element);
 								let fanyiLine = $span.text();
 								let yuanwenLine = $span.parent('p').text();
-								console.log(fanyiLine, yuanwenLine);
-
+								yuanwenLine=yuanwenLine.replace(fanyiLine,'');
+								fanyiLines.push(yuanwenLine+'$'+fanyiLine);
 							})
+							let fanyi=fanyiLines.join('$$');
+							console.log(fanyi);
 						}
 					}
+					//处理注释内容
+					{
+						let $=results[1];
+					}
+					//处理赏析内容
+					{
 
-
+					}
+					callback(null, 'crawle other content finished of id:' + id)
 				})
 			});
 		});
@@ -112,19 +124,20 @@ const main = async () => {
 
 }
 
-const fetchPageDoms = * (urls) => {
+const fetchPageDomsGenerator = function*(urls) {
 	logger.info('start to crawl urls:' + urls);
+	let doms = [];
 	for (let url of urls) {
-		fetchPageDom(url).then($ => {
-			yield $;
-		});
+		let $ = yield fetchPageDom(url);
+		doms.push($);
 	}
+	return doms;
 }
 
 const fetchPageDom = (url) => {
 	return new Promise((resolve, reject) => {
 		logger.info('start to crawl url:' + url);
-		let $ = undefined;
+		let $;
 		setTimeout(() => {
 			superagent.get(url).then(result => {
 				if (!result || !result.text) {
@@ -133,7 +146,9 @@ const fetchPageDom = (url) => {
 					$ = cheerio.load(result.text);
 				}
 				resolve($);
-			}).catch(err => resolve(undefined));
+			}).catch(err => {
+				logger.error(err);
+			});
 		}, config.request_interval_mills);
 	});
 }
