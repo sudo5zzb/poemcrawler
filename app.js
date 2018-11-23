@@ -9,7 +9,7 @@ const logger = require('./helper/logger');
 const eventproxy = require('eventproxy');
 const config = require('./config');
 const poem = require('./beans/poem')
-const esclient = require('./helper/esclient');
+const esutil = require('./helper/esutil');
 
 const ep = new eventproxy();
 
@@ -19,6 +19,9 @@ process.on('unhandledRejection', (err) => {
 })
 
 const main = async () => {
+	//初始化索引
+	await esutil.esIndexInit();
+
 	let pageUrls = [];
 	//测试
 	for (let i = 1; i <= 1; i++) {
@@ -101,6 +104,7 @@ const main = async () => {
 		//完善古诗内容
 		ep.after('poemObjs', poemUrls.size, async poemObjs => {
 			logger.info('start to crawle other content.');
+			let esclient = esutil.getClient();
 			async.mapLimit(poemObjs, config.request_parallel_size, (poem, callback) => {
 				id = poem.id;
 				let fanyiurl = 'https://so.gushiwen.org/shiwen2017/ajaxshiwencont.aspx?id=' + id + '&value=yi';
@@ -151,15 +155,12 @@ const main = async () => {
 							poem.shangxi = shangxi;
 						}
 					}
-					fs.appendFile('./poems.txt', JSON.stringify(poem, null, 2) + os.EOL);
+					es.insertAPoem(poem);
 					callback(null, 'crawle other content finished of id:' + id)
 				})
 			});
 		});
 	});
-
-
-
 }
 
 const fetchPageDomsGenerator = function*(urls) {
@@ -190,7 +191,5 @@ const fetchPageDom = (url) => {
 		}, config.request_interval_mills);
 	});
 }
-
-
 
 main();
