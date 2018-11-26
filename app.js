@@ -18,47 +18,56 @@ process.on('unhandledRejection', (err) => {
 	process.exit(1)
 })
 
+
+process.on('SIGINT', () => {
+	esutil.closeConnections();
+})
+
 const main = async () => {
 	//初始化索引
 	await esutil.esIndexInit();
 
 	let pageUrls = [];
-	//测试
-	for (let i = 1; i <= 1; i++) {
-		pageUrls.push('https://www.gushiwen.org/shiwen/default_4A111111111111A' + i + '.aspx');
-	}
-	// //诗类地址
-	// for (let i = 1; i <= 1000; i++) {
+	// 测试
+	// for (let i = 1; i <= 200; i++) {
 	// 	pageUrls.push('https://www.gushiwen.org/shiwen/default_4A111111111111A' + i + '.aspx');
 	// }
-	// //词类地址
-	// for (let i = 1; i <= 1000; i++) {
-	// 	pageUrls.push('https://www.gushiwen.org/shiwen/default_4A222222222222A' + i + '.aspx');
-	// }
-	// //曲类地址
-	// for (let i = 1; i <= 145; i++) {
-	// 	pageUrls.push('https://www.gushiwen.org/shiwen/default_4A333333333333A' + i + '.aspx');
-	// }
-	// //文言文类地址
-	// for (let i = 1; i <= 60; i++) {
-	// 	pageUrls.push('https://www.gushiwen.org/shiwen/default_4A444444444444A' + i + '.aspx');
-	// }
+	//诗类地址
+	for (let i = 1; i <= 1000; i++) {
+		pageUrls.push('https://www.gushiwen.org/shiwen/default_4A111111111111A' + i + '.aspx');
+	}
+	//词类地址
+	for (let i = 1; i <= 1000; i++) {
+		pageUrls.push('https://www.gushiwen.org/shiwen/default_4A222222222222A' + i + '.aspx');
+	}
+	//曲类地址
+	for (let i = 1; i <= 145; i++) {
+		pageUrls.push('https://www.gushiwen.org/shiwen/default_4A333333333333A' + i + '.aspx');
+	}
+	//文言文类地址
+	for (let i = 1; i <= 60; i++) {
+		pageUrls.push('https://www.gushiwen.org/shiwen/default_4A444444444444A' + i + '.aspx');
+	}
+	let processedPageUrlSize = 0;
 	async.mapLimit(pageUrls, config.request_parallel_size, (url, callback) => {
 		fetchPageDom(url).then($ => {
 			let poemUrls = [];
-
-			$('.main3 .left .sons').each((idx, element) => {
-				let poemUrl = $(element).find('.cont p').first().find('a').attr('href');
-				poemUrls.push(poemUrl);
-			})
+			if ($) {
+				$('.main3 .left .sons').each((idx, element) => {
+					let poemUrl = $(element).find('.cont p').first().find('a').attr('href');
+					poemUrls.push(poemUrl);
+				})
+			}
 			ep.emit('crawlPoemUrls', poemUrls);
 			logger.info('fetch poemUrls size:' + poemUrls.length + ' for url:' + url);
-			let mes = 'url:' + url + ' callback.';
+			processedPageUrlSize++;
+			let mes = 'fetch pageUrls >> url:' + url + ' callback. progress:' + processedPageUrlSize + '/' + pageUrls.length;
 			logger.info(mes);
 			callback(null, mes);
 		});
 	});
 
+	let processedPoemUrlSize = 0;
 	ep.after('crawlPoemUrls', pageUrls.length, async poemUrlArrays => {
 		logger.info('poemUrls crawled finished. poemUrlArrays size:' + poemUrlArrays.length);
 		let poemUrls = new Set();
@@ -69,43 +78,62 @@ const main = async () => {
 		});
 		logger.info('poemUrls size:' + poemUrls.size);
 		async.mapLimit(poemUrls, config.request_parallel_size, (url, callback) => {
+			let apoem;
 			fetchPageDom(url).then($ => {
-				let id = url.slice(url.lastIndexOf('_') + 1, url.lastIndexOf('.'));
-				let $left = $('.main3 .left');
-				let $cont = $left.find('.sons').first().find('.cont');
-				let title = $cont.find('h1').text().trim();
-				let $source = $cont.find('.source');
-				let dynasty = $source.find('a').eq(0).text().trim();
-				let author = $source.find('a').eq(1).text().trim();
-				let $contson = $cont.find('.contson');
-				$contson.find('span[stype]').remove();
-				$contson.find('br').replaceWith('$');
-				let content;
-				if ($contson.find('p').length) {
-					let contentArray = [];
-					$contson.find('p').each((idx, element) => {
-						contentArray.push($(element).text());
-					})
-					content = contentArray.join('$');
-				} else {
-					content = $contson.text();
+				if ($) {
+					let id = url.slice(url.lastIndexOf('_') + 1, url.lastIndexOf('.'));
+					let $left = $('.main3 .left');
+					let $cont = $left.find('.sons').first().find('.cont');
+					let title = $cont.find('h1').text().trim();
+					let $source = $cont.find('.source');
+					let dynasty = $source.find('a').eq(0).text().trim();
+					let author = $source.find('a').eq(1).text().trim();
+					let $contson = $cont.find('.contson');
+					$contson.find('span[stype]').remove();
+					$contson.find('br').replaceWith('$');
+					let content;
+					if ($contson.find('p').length) {
+						let contentArray = [];
+						$contson.find('p').each((idx, element) => {
+							contentArray.push($(element).text());
+						})
+						content = contentArray.join('$');
+					} else {
+						content = $contson.text();
+					}
+					content = content.replace(/\n/g, '');
+					let tags = [];
+					$left.find('.sons').first().find('.tag a').each((idx, element) => {
+						tags.push($(element).text());
+					});
+					apoem = new poem(id, title, author, dynasty, content, tags.join());
 				}
-				content = content.replace(/\n/g, '');
-				let tags = [];
-				$left.find('.sons').first().find('.tag a').each((idx, element) => {
-					tags.push($(element).text());
-				});
-				let apoem = new poem(id, title, author, dynasty, content, tags.join());
 				ep.emit('poemObjs', apoem);
-				callback(null, 'url:' + url + ' callback.');
+				processedPoemUrlSize++;
+				let mes = 'fetch poemContent >> url:' + url + ' callback. progress:' + processedPoemUrlSize + '/' + poemUrls.size;
+				logger.info(mes);
+				callback(null, mes);
+			}).catch(error => {
+				ep.emit('poemObjs', apoem);
+				processedPoemUrlSize++;
+				let mes = 'fetch poemContent >> url:' + url + ' callback. progress:' + processedPoemUrlSize + '/' + poemUrls.size;
+				logger.info(mes);
+				callback(null, mes);
 			});
 		});
 
 		//完善古诗内容
+		let processedTobeCompletedPoemUrlSize = 0;
 		ep.after('poemObjs', poemUrls.size, async poemObjs => {
 			logger.info('start to crawle other content.');
 			let esclient = esutil.getClient();
 			async.mapLimit(poemObjs, config.request_parallel_size, (poem, callback) => {
+				if (!poem) {
+					processedTobeCompletedPoemUrlSize++;
+					let mes = 'fetch poemOtherContent >> id:' + id + ' callback. progress:' + processedTobeCompletedPoemUrlSize + '/' + poemUrls.size;
+					logger.info(mes);
+					callback(null, mes);
+				}
 				id = poem.id;
 				let fanyiurl = 'https://so.gushiwen.org/shiwen2017/ajaxshiwencont.aspx?id=' + id + '&value=yi';
 				let zhushiurl = 'https://so.gushiwen.org/shiwen2017/ajaxshiwencont.aspx?id=' + id + '&value=zhu';
@@ -155,8 +183,11 @@ const main = async () => {
 							poem.shangxi = shangxi;
 						}
 					}
-					es.insertAPoem(poem);
-					callback(null, 'crawle other content finished of id:' + id)
+					esutil.insertAPoem(poem);
+					processedTobeCompletedPoemUrlSize++;
+					let mes = 'fetch poemOtherContent >> id:' + id + ' callback. progress:' + processedTobeCompletedPoemUrlSize + '/' + poemUrls.size;
+					logger.info(mes);
+					callback(null, mes);
 				})
 			});
 		});
@@ -187,6 +218,7 @@ const fetchPageDom = (url) => {
 				resolve($);
 			}).catch(err => {
 				logger.error(err);
+				resolve($);
 			});
 		}, config.request_interval_mills);
 	});

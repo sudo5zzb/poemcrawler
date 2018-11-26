@@ -11,7 +11,7 @@ const esclient = getClient();
 
 const insertAPoem = async (poem) => {
 	if (poem) {
-		await esclient.create({
+		await esclient.index({
 			index: config.es_index,
 			type: config.es_type,
 			body: poem
@@ -29,11 +29,15 @@ const esIndexInit = async () => {
 		type: es_type
 	});
 	if (!exists) {
-		await esclient.indices.create({
-			index: config.es_index,
-			type: config.es_type,
-			body: {
-				es_type: {
+		let es_index = config.es_index;
+		let es_type = config.es_type;
+		let exists = await esclient.indices.existsType({
+			index: es_index,
+			type: es_type
+		});
+		if (!exists) {
+			try {
+				let propertiesObj = {
 					properties: {
 						id: {
 							type: 'keyword'
@@ -72,14 +76,33 @@ const esIndexInit = async () => {
 							analyzer: 'ik_max_word',
 							search_analyzer: 'ik_smart'
 						}
-
 					}
-				}
+
+				};
+				let mapping = {};
+				mapping[es_type] = propertiesObj;
+				await esclient.indices.create({
+					index: es_index
+				});
+				await esclient.indices.putMapping({
+					index: es_index,
+					type: es_type,
+					body: mapping
+				});
+			} catch (err) {
+				console.log(err);
+			} finally {
+				esclient.close();
 			}
-		});
+		}
 	}
 }
 
+const closeConnections = () => {
+	esclient.close();
+}
+
+exports.closeConnections = closeConnections;
 exports.getClient = getClient;
 exports.esIndexInit = esIndexInit;
 exports.insertAPoem = insertAPoem;
