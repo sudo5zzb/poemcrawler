@@ -3,6 +3,6 @@ module.exports = {
 	es_index: 'poem',
 	es_type: 'poem',
 	log_level: 'info',
-	request_interval_mills: 1000,
-	request_parallel_size: 5
+	request_interval_mills: 100,
+	request_parallel_size: 10
 }

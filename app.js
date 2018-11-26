@@ -113,12 +113,6 @@ const main = async () => {
 				let mes = 'fetch poemContent >> url:' + url + ' callback. progress:' + processedPoemUrlSize + '/' + poemUrls.size;
 				logger.info(mes);
 				callback(null, mes);
-			}).catch(error => {
-				ep.emit('poemObjs', apoem);
-				processedPoemUrlSize++;
-				let mes = 'fetch poemContent >> url:' + url + ' callback. progress:' + processedPoemUrlSize + '/' + poemUrls.size;
-				logger.info(mes);
-				callback(null, mes);
 			});
 		});
 
@@ -133,6 +127,7 @@ const main = async () => {
 					let mes = 'fetch poemOtherContent >> id:' + id + ' callback. progress:' + processedTobeCompletedPoemUrlSize + '/' + poemUrls.size;
 					logger.info(mes);
 					callback(null, mes);
+					return;
 				}
 				id = poem.id;
 				let fanyiurl = 'https://so.gushiwen.org/shiwen2017/ajaxshiwencont.aspx?id=' + id + '&value=yi';
