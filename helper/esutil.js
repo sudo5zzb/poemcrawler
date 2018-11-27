@@ -23,79 +23,71 @@ const insertAPoem = async (poem) => {
 const esIndexInit = async () => {
 	let es_index = config.es_index;
 	let es_type = config.es_type;
-	let esclient = getClient();
 	let exists = await esclient.indices.existsType({
 		index: es_index,
 		type: es_type
 	});
 	if (!exists) {
-		let es_index = config.es_index;
-		let es_type = config.es_type;
-		let exists = await esclient.indices.existsType({
-			index: es_index,
-			type: es_type
-		});
-		if (!exists) {
-			try {
-				let propertiesObj = {
-					properties: {
-						id: {
-							type: 'keyword'
-						},
-						title: {
-							type: 'keyword'
-						},
-						author: {
-							type: 'keyword'
-						},
-						dynasty: {
-							type: 'keyword'
-						},
-						content: {
-							type: 'text',
-							analyzer: 'ik_max_word',
-							search_analyzer: 'ik_smart'
-						},
-						tags: {
-							type: 'text',
-							analyzer: 'ik_max_word',
-							search_analyzer: 'ik_smart'
-						},
-						fanyi: {
-							type: 'text',
-							analyzer: 'ik_max_word',
-							search_analyzer: 'ik_smart'
-						},
-						zhushi: {
-							type: 'text',
-							analyzer: 'ik_max_word',
-							search_analyzer: 'ik_smart'
-						},
-						shangxi: {
-							type: 'text',
-							analyzer: 'ik_max_word',
-							search_analyzer: 'ik_smart'
-						}
+		try {
+			let propertiesObj = {
+				properties: {
+					id: {
+						type: 'keyword'
+					},
+					title: {
+						type: 'keyword'
+					},
+					author: {
+						type: 'keyword'
+					},
+					dynasty: {
+						type: 'keyword'
+					},
+					content: {
+						type: 'text',
+						analyzer: 'ik_max_word',
+						search_analyzer: 'ik_smart'
+					},
+					tags: {
+						type: 'text',
+						analyzer: 'ik_max_word',
+						search_analyzer: 'ik_smart'
+					},
+					fanyi: {
+						type: 'text',
+						analyzer: 'ik_max_word',
+						search_analyzer: 'ik_smart'
+					},
+					zhushi: {
+						type: 'text',
+						analyzer: 'ik_max_word',
+						search_analyzer: 'ik_smart'
+					},
+					shangxi: {
+						type: 'text',
+						analyzer: 'ik_max_word',
+						search_analyzer: 'ik_smart'
 					}
+				}
 
-				};
-				let mapping = {};
-				mapping[es_type] = propertiesObj;
-				await esclient.indices.create({
-					index: es_index
-				});
-				await esclient.indices.putMapping({
-					index: es_index,
-					type: es_type,
-					body: mapping
-				});
-			} catch (err) {
-				console.log(err);
-			} finally {
-				esclient.close();
-			}
+			};
+			let mapping = {};
+			mapping[es_type] = propertiesObj;
+			await esclient.indices.create({
+				index: es_index
+			});
+			await esclient.indices.putMapping({
+				index: es_index,
+				type: es_type,
+				body: mapping
+			});
+		} catch (err) {
+			console.log(err);
+		} finally {
+			esclient.close();
 		}
 	}
+
 }
 
 const closeConnections = () => {
